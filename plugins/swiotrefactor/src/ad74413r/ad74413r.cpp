@@ -41,14 +41,12 @@ Ad74413r::Ad74413r(QString uri, ToolMenuEntry *tme, QWidget *parent)
 	: QWidget(parent)
 	, m_uri(uri)
 	, m_tme(tme)
-	, m_statusLabel(new QLabel(this))
 	, m_swiotAdLogic(nullptr)
-	, m_widget(this)
 	, m_readerThread(nullptr)
-	, m_statusContainer(new QWidget(this))
 	, m_currentChannelSelected(0)
 {
-	this->setupToolTemplate();
+	initPlotData();
+	setupToolTemplate();
 	m_conn = ConnectionProvider::open(m_uri);
 	connect(m_conn, &Connection::aboutToBeDestroyed, this, &Ad74413r::handleConnectionDestroyed);
 	m_ctx = m_conn->context();
@@ -59,12 +57,12 @@ Ad74413r::Ad74413r(QString uri, ToolMenuEntry *tme, QWidget *parent)
 		char mode[64];
 		ssize_t result = iio_device_attr_read(m_iioDevicesMap[SWIOT_DEVICE_NAME], "mode", mode, 64);
 		if((result >= 0) && (strcmp(mode, "runtime") == 0)) {
-			m_enabledChannels = std::vector<bool>(MAX_CURVES_NUMBER, false);
+			m_enabledChannels = QVector<bool>(MAX_CURVES_NUMBER, false);
 
 			m_swiotAdLogic = new BufferLogic(m_iioDevicesMap, m_cmdQueue);
 			m_readerThread = new ReaderThread(true, m_cmdQueue, this);
 			m_readerThread->addBufferedDevice(m_iioDevicesMap[AD_NAME]);
-			m_plotHandler = new BufferPlotHandler(this, m_swiotAdLogic->getPlotChnlsNo());
+			m_acqHandler = new BufferAcquisitionHandler(this);
 
 			setupConnections();
 			m_swiotAdLogic->initAd74413rChnlsFunctions();
@@ -96,8 +94,8 @@ void Ad74413r::setupConnections()
 	connect(m_backBtn, &QPushButton::pressed, this, &Ad74413r::onBackBtnPressed);
 	connect(m_runBtn, &QPushButton::toggled, this, &Ad74413r::onRunBtnPressed);
 	connect(m_swiotAdLogic, &BufferLogic::chnlsChanged, m_readerThread, &ReaderThread::onChnlsChange);
-	connect(m_swiotAdLogic, &BufferLogic::samplingFrequencyComputed, m_plotHandler,
-		&BufferPlotHandler::onSamplingFrequencyComputed);
+	connect(m_swiotAdLogic, &BufferLogic::samplingFrequencyComputed, m_acqHandler,
+		&BufferAcquisitionHandler::onSamplingFrequencyComputed);
 	connect(m_swiotAdLogic, &BufferLogic::samplingFrequencyComputed, this, [=, this](double frequency) {
 		m_frequency = frequency;
 		refreshSampleRate();
@@ -106,26 +104,27 @@ void Ad74413r::setupConnections()
 		&ReaderThread::onSamplingFrequencyComputed);
 	connect(this, &Ad74413r::activateRunBtns, this, &Ad74413r::onActivateRunBtns);
 
-	connect(m_readerThread, SIGNAL(bufferRefilled(QMap, int)), m_plotHandler,
-		SLOT(onBufferRefilled(QVector<QVector<double>>, int)), Qt::QueuedConnection);
+	connect(m_readerThread, &ReaderThread::bufferRefilled, m_acqHandler,
+		&BufferAcquisitionHandler::onBufferRefilled, Qt::QueuedConnection);
 	connect(m_readerThread, &ReaderThread::readerThreadFinished, this, &Ad74413r::onReaderThreadFinished,
 		Qt::QueuedConnection);
 
 	connect(m_singleBtn, &QPushButton::toggled, this, &Ad74413r::onSingleBtnPressed);
-	connect(m_plotHandler, &BufferPlotHandler::singleCaptureFinished, this, &Ad74413r::onSingleCaptureFinished);
-	connect(this, &Ad74413r::timespanChanged, m_plotHandler, &BufferPlotHandler::onTimespanChanged);
+	connect(m_acqHandler, &BufferAcquisitionHandler::singleCaptureFinished, this,
+		&Ad74413r::onSingleCaptureFinished);
+	connect(this, &Ad74413r::timespanChanged, m_acqHandler, &BufferAcquisitionHandler::onTimespanChanged);
 	connect(this, &Ad74413r::timespanChanged, this, &Ad74413r::refreshSampleRate);
 
 	connect(m_swiotAdLogic, &BufferLogic::channelFunctionDetermined, this, &Ad74413r::setupChannel);
 
 	connect(m_tme, &ToolMenuEntry::runToggled, m_runBtn, &QPushButton::setChecked);
-	connect(m_plotHandler, &BufferPlotHandler::bufferDataReady, this, &Ad74413r::onBufferRefilled);
+	connect(m_acqHandler, &BufferAcquisitionHandler::bufferDataReady, this, &Ad74413r::onBufferRefilled);
 
-	//	connect(m_toolView->getPrintBtn(), &QPushButton::clicked, m_plotHandler,
-	//&BufferPlotHandler::onPrintBtnClicked);
+	//	connect(m_toolView->getPrintBtn(), &QPushButton::clicked, m_acqHandler,
+	//&BufferAcquisitionHandler::onPrintBtnClicked);
 }
 
-void Ad74413r::onChannelWidgetEnabled(int chnlIdx, bool en)
+void Ad74413r::onChannelBtnChecked(int chnlIdx, bool en)
 {
 	if(en) {
 		m_enabledChannels[chnlIdx] = true;
@@ -141,8 +140,6 @@ void Ad74413r::onChannelWidgetEnabled(int chnlIdx, bool en)
 	} else {
 		Q_EMIT activateRunBtns(true);
 	}
-
-	Q_EMIT channelWidgetEnabled(chnlIdx, en);
 }
 
 void Ad74413r::onActivateRunBtns(bool enable)
@@ -171,8 +168,8 @@ void Ad74413r::onRunBtnPressed(bool toggled)
 		m_singleBtn->setEnabled(false);
 		verifyChnlsChanges();
 		if(!m_readerThread->isRunning()) {
-			m_plotHandler->setSingleCapture(false);
-			m_plotHandler->resetPlotParameters();
+			m_acqHandler->setSingleCapture(false);
+			m_acqHandler->resetPlotParameters();
 			m_readerThread->startCapture();
 		}
 		if(!m_tme->running()) {
@@ -196,10 +193,10 @@ void Ad74413r::onSingleBtnPressed(bool toggled)
 		if(runBtnChecked) {
 			m_runBtn->setChecked(false);
 		}
-		m_plotHandler->setSingleCapture(true);
+		m_acqHandler->setSingleCapture(true);
 		if(!m_readerThread->isRunning()) {
-			m_plotHandler->resetPlotParameters();
-			int bufNumber = m_plotHandler->getRequiredBuffersNumber();
+			m_acqHandler->resetPlotParameters();
+			int bufNumber = m_acqHandler->getRequiredBuffersNumber();
 			m_readerThread->startCapture(bufNumber);
 		}
 		m_singleBtn->setEnabled(false);
@@ -213,10 +210,10 @@ void Ad74413r::onSingleCaptureFinished()
 		if(m_tme->running()) {
 			m_tme->setRunning(false);
 		}
-		m_runBtn->setEnabled(true);
+		m_singleBtn->setEnabled(true);
 	}
 	m_readerThread->requestStop();
-	m_runBtn->setChecked(false);
+	m_singleBtn->setChecked(false);
 }
 
 void Ad74413r::verifyChnlsChanges()
@@ -244,28 +241,18 @@ void Ad74413r::createDevicesMap(iio_context *ctx)
 
 void Ad74413r::onReaderThreadFinished()
 {
-	bool singleCaptureOn = m_plotHandler->singleCapture();
+	bool singleCaptureOn = m_acqHandler->singleCapture();
 	if(singleCaptureOn) {
-		m_plotHandler->setSingleCapture(false);
+		m_acqHandler->setSingleCapture(false);
 	}
 	int nbRequiredBuffers = 0;
 	if(m_runBtn->isChecked() || !m_singleBtn->isEnabled()) {
-		m_plotHandler->resetPlotParameters();
+		m_acqHandler->resetPlotParameters();
 		if(m_singleBtn->isChecked()) {
-			m_plotHandler->setSingleCapture(true);
-			nbRequiredBuffers = m_plotHandler->getRequiredBuffersNumber();
+			m_acqHandler->setSingleCapture(true);
+			nbRequiredBuffers = m_acqHandler->getRequiredBuffersNumber();
 		}
 		m_readerThread->startCapture(nbRequiredBuffers);
-	}
-}
-
-void Ad74413r::externalPowerSupply(bool ps)
-{
-	if(ps) {
-		m_statusContainer->hide();
-	} else {
-		m_statusContainer->show();
-		m_statusLabel->show();
 	}
 }
 
@@ -301,19 +288,18 @@ void Ad74413r::initTutorialProperties()
 	m_plot->setProperty("tutorial_name", "AD74413R_PLOT");
 	m_singleBtn->setProperty("tutorial_name", "SINGLE_BUTTON");
 	m_runBtn->setProperty("tutorial_name", "RUN_BUTTON");
-	//	m_toolView->getGeneralSettingsBtn()->setProperty("tutorial_name", "AD74413R_SETTINGS");
+	m_settingsBtn->setProperty("tutorial_name", "AD74413R_SETTINGS");
 	m_backBtn->setProperty("tutorial_name", "CONFIG_BUTTON");
 }
 
 void Ad74413r::initPlotData()
 {
-	// to investigate
 	m_xTime.clear();
 	for(int i = 0; i < m_sampleRate; i++) {
 		m_xTime.push_back(-(i / m_sampleRate));
 	}
 	for(int i = 0; i < MAX_CURVES_NUMBER; i++) {
-		m_yValues[i] = std::vector<double>(MAX_SAMPLE_RATE, 0);
+		m_yValues[i] = QVector<double>();
 	}
 }
 
@@ -324,6 +310,32 @@ void Ad74413r::initPlot()
 	m_plot->xAxis()->scaleDraw()->setFloatPrecision(2);
 	m_plot->leftHandlesArea()->setVisible(true);
 	m_plot->replot();
+}
+
+void Ad74413r::onBufferRefilled(QMap<int, QVector<double>> bufferData)
+{
+	const QList<int> chList = m_yValues.keys();
+	for(const int &ch : chList) {
+		m_yValues[ch].clear();
+		m_yValues[ch] = bufferData[ch];
+	}
+
+	QList<PlotChannel *> chnls = m_plot->getChannels();
+	for(int chnlIdx = 0; chnlIdx < chnls.size(); chnlIdx++) {
+		chnls[chnlIdx]->curve()->setRawSamples(m_xTime.data(), m_yValues[chnlIdx].data(),
+						       m_yValues[chnlIdx].size());
+	}
+	m_plot->replot();
+}
+
+void Ad74413r::refreshSampleRate()
+{
+	double timespanValue = m_timespanSpin->value();
+	m_sampleRate = m_frequency * timespanValue;
+	m_xTime.clear();
+	for(int i = 0; i < m_sampleRate; i++) {
+		m_xTime.push_back(-(i / m_sampleRate) * timespanValue);
+	}
 }
 
 PlotAxis *Ad74413r::createYChnlAxis(QPen pen, QString unitType, int yMin, int yMax)
@@ -337,26 +349,33 @@ PlotAxis *Ad74413r::createYChnlAxis(QPen pen, QString unitType, int yMin, int yM
 	return chYAxis;
 }
 
-void Ad74413r::setupDeviceBtn()
+void Ad74413r::setupChannelBtn(MenuControlButton *btn, PlotChannel *ch, QString chnlId, int chnlIdx)
 {
-	VerticalChannelManager *vcm = new VerticalChannelManager(this);
-	m_tool->leftStack()->add("vcm", vcm);
-	// for devBtn I have to make a connection with the general settings menu
-	m_devBtn = new CollapsableMenuControlButton(this);
-	m_devBtn->getControlBtn()->setName("AD74413R");
-	m_devBtn->getControlBtn()->setCheckable(false);
-	m_devBtn->getControlBtn()->button()->setVisible(false);
-	vcm->add(m_devBtn);
-	m_chnlsBtnGroup = new QButtonGroup(this);
-}
-
-void Ad74413r::setupChannelsMenuBtn(MenuControlButton *btn, QString name)
-{
-	btn->setName(name);
+	btn->setName(chnlId);
+	btn->setCheckBoxStyle(MenuControlButton::CS_CIRCLE);
 	btn->setOpenMenuChecksThis(true);
 	btn->setDoubleClickToOpenMenu(true);
-	btn->checkBox()->setVisible(false);
-	btn->setChecked(true);
+	btn->setColor(ch->curve()->pen().color());
+	btn->button()->setVisible(false);
+	btn->setCheckable(true);
+	btn->checkBox()->setChecked(false);
+
+	connect(btn, &MenuControlButton::toggled, this, [=, this](bool en) {
+		if(en) {
+			if(btn->checkBox()->isChecked()) {
+				m_plot->selectChannel(ch);
+				m_plot->replot();
+			}
+			m_channelStack->show(chnlId);
+		}
+	});
+
+	connect(btn->checkBox(), &QCheckBox::toggled, this, [=, this](bool en) {
+		ch->handle()->handle()->setVisible(en);
+		ch->setEnabled(en);
+		onChannelBtnChecked(chnlIdx, en);
+		m_plot->replot();
+	});
 }
 
 void Ad74413r::setupChannel(int chnlIdx, QString function)
@@ -370,7 +389,11 @@ void Ad74413r::setupChannel(int chnlIdx, QString function)
 
 		PlotAxis *chYAxis = createYChnlAxis(chPen, unit, yRange.first, yRange.second);
 		PlotChannel *plotCh = new PlotChannel(chnlId, chPen, m_plot, m_plot->xAxis(), chYAxis, this);
+		plotCh->setEnabled(false);
+		plotCh->curve()->setRawSamples(m_xTime.data(), m_yValues[chnlIdx].data(), m_yValues[chnlIdx].size());
+
 		PlotAxisHandle *chHandle = new PlotAxisHandle(chPen, chYAxis, m_plot, QwtAxis::YLeft, this);
+		chHandle->handle()->setVisible(false);
 		plotCh->setHandle(chHandle);
 		m_plot->addPlotAxisHandle(chHandle);
 		m_plot->addPlotChannel(plotCh);
@@ -383,21 +406,7 @@ void Ad74413r::setupChannel(int chnlIdx, QString function)
 		MenuControlButton *btn = new MenuControlButton(m_devBtn);
 		m_devBtn->add(btn);
 		m_chnlsBtnGroup->addButton(btn);
-		setupChannelMenuControlButtonHelper(btn, plotCh, chnlId);
-		plotCh->setEnabled(false);
-		plotCh->curve()->setRawSamples(m_xTime.data(), m_yValues[chnlIdx].data(), m_xTime.size());
-
-		connect(btn, &MenuControlButton::toggled, this, [=, this](bool en) {
-			if(en) {
-				m_plot->selectChannel(plotCh);
-				m_channelStack->show(chnlId);
-			}
-		});
-
-		connect(btn->checkBox(), &MenuControlButton::toggled, this, [=, this](bool en) {
-			plotCh->setEnabled(en);
-			onChannelWidgetEnabled(chnlIdx, en);
-		});
+		setupChannelBtn(btn, plotCh, chnlId, chnlIdx);
 
 		connect(menu, &BufferMenuView::setYMin, chYAxis, &PlotAxis::setMin);
 		connect(chYAxis, &PlotAxis::minChanged, this, [=, this]() { Q_EMIT menu->minChanged(chYAxis->min()); });
@@ -416,17 +425,26 @@ void Ad74413r::setupChannel(int chnlIdx, QString function)
 	}
 }
 
-void Ad74413r::onBufferRefilled(QMap<int, std::vector<double>> bufferData)
+void Ad74413r::setupChannelsMenuControlBtn(MenuControlButton *btn, QString name)
 {
-	const QList<int> chList = m_yValues.keys();
-	for(const int &ch : chList) {
-		m_yValues[ch].clear();
-		m_yValues[ch] = bufferData[ch];
-	}
-	m_plot->replot();
+	btn->setName(name);
+	btn->setOpenMenuChecksThis(true);
+	btn->setDoubleClickToOpenMenu(true);
+	btn->checkBox()->setVisible(false);
+	btn->setChecked(true);
 }
 
-void Ad74413r::refreshSampleRate() { m_sampleRate = m_frequency * m_timespanSpin->value(); }
+void Ad74413r::setupDeviceBtn()
+{
+	VerticalChannelManager *vcm = new VerticalChannelManager(this);
+	m_tool->leftStack()->add("vcm", vcm);
+	m_devBtn = new CollapsableMenuControlButton(this);
+	m_devBtn->getControlBtn()->setName("AD74413R");
+	m_devBtn->getControlBtn()->setCheckable(false);
+	m_devBtn->getControlBtn()->button()->setVisible(false);
+	vcm->add(m_devBtn);
+	m_chnlsBtnGroup = new QButtonGroup(this);
+}
 
 void Ad74413r::setupToolTemplate()
 {
@@ -455,14 +473,16 @@ void Ad74413r::setupToolTemplate()
 
 	m_settingsBtn = new GearBtn(this);
 	m_runBtn = new RunBtn(this);
+	m_runBtn->setEnabled(false);
 	m_runBtn->setChecked(false);
 	m_singleBtn = new SingleShotBtn(this);
+	m_singleBtn->setEnabled(false);
 	m_singleBtn->setChecked(false);
 	m_printBtn = new PrintBtn(this);
 	m_backBtn = createBackBtn();
 
 	MenuControlButton *chnlsMenuBtn = new MenuControlButton(this);
-	setupChannelsMenuBtn(chnlsMenuBtn, "Channels");
+	setupChannelsMenuControlBtn(chnlsMenuBtn, "Channels");
 	connect(chnlsMenuBtn->button(), &QAbstractButton::toggled, this, [=, this](bool b) {
 		if(b)
 			m_tool->requestMenu(channelsMenuId);
@@ -495,24 +515,6 @@ void Ad74413r::setupToolTemplate()
 	m_tool->addWidgetToTopContainerHelper(m_singleBtn, TTA_RIGHT);
 	m_tool->addWidgetToTopContainerHelper(m_printBtn, TTA_LEFT);
 	m_tool->addWidgetToTopContainerHelper(m_backBtn, TTA_LEFT);
-}
-
-void Ad74413r::setupChannelMenuControlButtonHelper(MenuControlButton *btn, PlotChannel *ch, QString chnlId)
-{
-	btn->setName(chnlId);
-	btn->setCheckBoxStyle(MenuControlButton::CS_CIRCLE);
-	btn->setOpenMenuChecksThis(true);
-	btn->setDoubleClickToOpenMenu(true);
-	btn->setColor(ch->curve()->pen().color());
-	btn->button()->setVisible(false);
-	btn->setCheckable(true);
-	connect(btn->checkBox(), &QCheckBox::toggled, this, [=](bool b) {
-		if(b)
-			ch->enable();
-		else
-			ch->disable();
-	});
-	btn->checkBox()->setChecked(false);
 }
 
 QPushButton *Ad74413r::createBackBtn()

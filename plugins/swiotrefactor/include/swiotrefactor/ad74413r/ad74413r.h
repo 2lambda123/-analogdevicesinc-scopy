@@ -22,7 +22,7 @@
 #define AD74413R_H
 
 #include "bufferlogic.h"
-#include "bufferplothandler.h"
+#include "bufferacquisitionhandler.h"
 #include "pluginbase/toolmenuentry.h"
 #include "readerthread.h"
 
@@ -56,15 +56,12 @@ public:
 	~Ad74413r();
 
 public Q_SLOTS:
-	void onChannelWidgetEnabled(int chnWidgetId, bool en);
-
 	void onRunBtnPressed(bool toggled);
 	void onSingleBtnPressed(bool toggled);
 
 	void onReaderThreadFinished();
 	void onSingleCaptureFinished();
 
-	void externalPowerSupply(bool ps);
 	void onDiagnosticFunctionUpdated();
 
 	void onActivateRunBtns(bool activate);
@@ -77,9 +74,6 @@ Q_SIGNALS:
 	void timespanChanged(double val);
 	void broadcastReadThreshold();
 
-	void channelWidgetEnabled(int curveId, bool en);
-	void channelWidgetSelected(int curveId);
-
 	void exportBtnClicked(QMap<int, bool> exportConfig);
 
 	void activateExportButton();
@@ -88,55 +82,40 @@ Q_SIGNALS:
 	void backBtnPressed();
 private Q_SLOTS:
 	void onBackBtnPressed();
-	////
-	/// \brief Added for the new adinstrument
+	void refreshSampleRate();
 	void showPlotLabels(bool b);
 	void setupChannel(int chnlIdx, QString function);
-	void onBufferRefilled(QMap<int, std::vector<double>> bufferData);
-	void refreshSampleRate();
-	///////////
+	void onBufferRefilled(QMap<int, QVector<double>> bufferData);
+	void onChannelBtnChecked(int chnWidgetId, bool en);
 
 private:
 	void createDevicesMap(iio_context *ctx);
-	void createMonitorChannelMenu();
-
 	void setupConnections();
 	void verifyChnlsChanges();
 	void initTutorialProperties();
-	/////
-	/// \brief Added for the new adinstrument
-	///
 	void initPlotData();
 	void setupToolTemplate();
 	void initPlot();
-	PlotAxis *createYChnlAxis(QPen pen, QString unitType = "V", int yMin = -1, int yMax = 1);
 	void setupDeviceBtn();
-	void setupChannelsMenuBtn(MenuControlButton *btn, QString name);
-	void setupChannelMenuControlButtonHelper(MenuControlButton *btn, PlotChannel *ch, QString chnlId);
+	void setupChannelBtn(MenuControlButton *btn, PlotChannel *ch, QString chnlId, int chnlIdx);
+	void setupChannelsMenuControlBtn(MenuControlButton *btn, QString name);
 	QPushButton *createBackBtn();
 	QWidget *createSettingsMenu(QWidget *parent);
-	///////////////
+	PlotAxis *createYChnlAxis(QPen pen, QString unitType = "V", int yMin = -1, int yMax = 1);
 
 private:
-	int m_enabledChnlsNo = 0;
-
-	QWidget *m_widget;
-	QLabel *m_statusLabel;
-	QWidget *m_statusContainer;
 	ToolMenuEntry *m_tme;
-
-	std::vector<bool> m_enabledChannels;
-
 	PositionSpinButton *m_timespanSpin;
+
+	QVector<bool> m_enabledChannels;
 
 	QString m_uri;
 
 	BufferLogic *m_swiotAdLogic;
 	ReaderThread *m_readerThread;
-	BufferPlotHandler *m_plotHandler;
+	BufferAcquisitionHandler *m_acqHandler;
 	CommandQueue *m_cmdQueue;
 
-	//	PositionSpinButton *m_timespanSpin;
 	//	ExportSettings *m_exportSettings;
 
 	struct iio_context *m_ctx;
@@ -163,8 +142,8 @@ private:
 	MapStackedWidget *m_channelStack;
 
 	int m_currentChannelSelected = 0;
-	QMap<int, std::vector<double>> m_yValues;
-	std::vector<double> m_xTime;
+	QMap<int, QVector<double>> m_yValues;
+	QVector<double> m_xTime;
 
 	const QString channelsMenuId = "channels";
 	/////////////////
