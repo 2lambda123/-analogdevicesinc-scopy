@@ -24,6 +24,7 @@ class SpinBoxA;
 class MeasurementLabel;
 class StatsLabel;
 class MeasurementSelectorItem;
+class TitleSpinBox;
 } // namespace scopy
 
 namespace scopy {
@@ -102,6 +103,8 @@ public:
 	static void HoverToolTip(QWidget *w, QString info, QString objectName = "");
 	static void WarningLabel(QLabel *w, QString objectName = "");
 	static void NoBackgroundIconButton(QPushButton *w, QIcon icon, QString objectName = "");
+	static void SpinBoxUpButton(QPushButton *w, QString objectName);
+	static void SpinBoxDownButton(QPushButton *w, QString objectName);
 
 private:
 	QMap<QString, QString> colorMap;
