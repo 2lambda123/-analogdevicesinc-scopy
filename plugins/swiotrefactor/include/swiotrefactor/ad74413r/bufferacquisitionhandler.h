@@ -21,7 +21,6 @@
 #ifndef BUFFERACQUISITIONHANDLER_H
 #define BUFFERACQUISITIONHANDLER_H
 
-//#include "channelplotscalescontroller.h"
 #include <QObject>
 #include <qmutex.h>
 #include <QMap>

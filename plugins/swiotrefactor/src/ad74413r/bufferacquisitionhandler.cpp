@@ -45,16 +45,16 @@ void BufferAcquisitionHandler::onBufferRefilled(QMap<int, QVector<double>> buffe
 	m_lock->lock();
 	if(!(m_singleCapture && (m_bufferIndex == m_buffersNumber))) {
 		if(bufferDataSize > 0) {
+			int samplingFreq = m_plotSamplingFreq * m_timespan;
 			QList<int> keys = bufferData.keys();
 			for(const auto &key : keys) {
-				if(m_bufferIndex == m_buffersNumber) {
-					if(m_dataPoints[key].size() >= m_bufferSize) {
-						m_dataPoints[key].erase(m_dataPoints[key].begin(),
-									m_dataPoints[key].begin() + m_bufferSize);
-						rolling = true;
-					}
-				}
 				m_dataPoints[key].append(bufferData[key]);
+				int unnecessarySamples = m_dataPoints[key].size() % samplingFreq;
+				if(m_dataPoints[key].size() > samplingFreq) {
+					m_dataPoints[key].erase(m_dataPoints[key].begin(),
+								m_dataPoints[key].begin() + unnecessarySamples);
+				}
+				rolling = (m_bufferIndex == m_buffersNumber);
 			}
 		}
 		m_bufferIndex = (rolling) ? m_bufferIndex : m_bufferIndex + 1;

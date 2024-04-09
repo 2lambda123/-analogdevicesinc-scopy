@@ -36,6 +36,7 @@
 
 #include <QVector>
 #include <QWidget>
+#include <plotinfo.h>
 #include <spinbox_a.hpp>
 
 #include <iioutil/connection.h>
@@ -71,24 +72,24 @@ public Q_SLOTS:
 	void onSamplingFrequencyUpdated(int channelId, int sampFreq);
 
 Q_SIGNALS:
-	void timespanChanged(double val);
 	void broadcastReadThreshold();
-
 	void exportBtnClicked(QMap<int, bool> exportConfig);
 
 	void activateExportButton();
 	void activateRunBtns(bool activate);
 
-	void backBtnPressed();
+	void configBtnPressed();
 private Q_SLOTS:
-	void onBackBtnPressed();
-	void refreshSampleRate();
+	void onConfigBtnPressed();
 	void showPlotLabels(bool b);
 	void setupChannel(int chnlIdx, QString function);
-	void onBufferRefilled(QMap<int, QVector<double>> bufferData);
+	void onSamplingFreqComputed(double freq);
+	void onBufferRefilled(QMap<int, QVector<double>> chnlData);
 	void onChannelBtnChecked(int chnWidgetId, bool en);
 
 private:
+	void updateXData(int dataSize);
+	void plotData(QVector<double> curveData, int chnlIdx);
 	void createDevicesMap(iio_context *ctx);
 	void setupConnections();
 	void verifyChnlsChanges();
@@ -99,8 +100,9 @@ private:
 	void setupDeviceBtn();
 	void setupChannelBtn(MenuControlButton *btn, PlotChannel *ch, QString chnlId, int chnlIdx);
 	void setupChannelsMenuControlBtn(MenuControlButton *btn, QString name);
-	QPushButton *createBackBtn();
+	QPushButton *createConfigBtn();
 	QWidget *createSettingsMenu(QWidget *parent);
+	PlotAxis *createXChnlAxis(QPen pen, int xMin = -1, int xMax = 0);
 	PlotAxis *createYChnlAxis(QPen pen, QString unitType = "V", int yMin = -1, int yMax = 1);
 
 private:
@@ -116,23 +118,20 @@ private:
 	BufferAcquisitionHandler *m_acqHandler;
 	CommandQueue *m_cmdQueue;
 
-	//	ExportSettings *m_exportSettings;
-
 	struct iio_context *m_ctx;
 	Connection *m_conn;
 
-	////
-	/// \brief Added for the new adinstrument
-	///
-	double m_frequency = 1.0;
-	double m_sampleRate = 4800;
 	ToolTemplate *m_tool;
 	RunBtn *m_runBtn;
 	SingleShotBtn *m_singleBtn;
 	PrintBtn *m_printBtn;
-	QPushButton *m_backBtn;
-	PlotWidget *m_plot;
+	QPushButton *m_configBtn;
 	GearBtn *m_settingsBtn;
+
+	PlotWidget *m_plot;
+	TimePlotInfo *m_info;
+	PlotSamplingInfo m_currentSamplingInfo;
+	QMap<int, PlotChannel *> m_plotChnls;
 
 	QMap<QString, iio_device *> m_iioDevicesMap;
 	CollapsableMenuControlButton *m_devBtn;
@@ -141,12 +140,11 @@ private:
 
 	MapStackedWidget *m_channelStack;
 
+	bool m_fullyFilled = false;
 	int m_currentChannelSelected = 0;
-	QMap<int, QVector<double>> m_yValues;
 	QVector<double> m_xTime;
 
 	const QString channelsMenuId = "channels";
-	/////////////////
 };
 } // namespace swiotrefactor
 } // namespace scopy
