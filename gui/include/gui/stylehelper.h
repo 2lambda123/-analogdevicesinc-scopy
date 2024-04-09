@@ -8,6 +8,9 @@
 #include <QPushButton>
 #include <QHBoxLayout>
 #include <QStatusBar>
+#include <QTableWidget>
+#include <QSplitter>
+#include <QTreeView>
 
 #include <scopy-gui_export.h>
 #include <utils.h>
@@ -105,6 +108,10 @@ public:
 	static void NoBackgroundIconButton(QPushButton *w, QIcon icon, QString objectName = "");
 	static void SpinBoxUpButton(QPushButton *w, QString objectName);
 	static void SpinBoxDownButton(QPushButton *w, QString objectName);
+	static void TabWidgetBarUnderline(QTabWidget *w, QString objectName = "");
+	static void TableWidgetDebugger(QTableWidget *w, QString objectName = "");
+	static void SplitterStyle(QSplitter *w, QString objectName = "");
+	static void TreeViewDebugger(QTreeView *w, QString objectName = "");
 
 private:
 	QMap<QString, QString> colorMap;
