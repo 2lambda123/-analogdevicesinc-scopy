@@ -46,8 +46,7 @@ public Q_SLOTS:
 private Q_SLOTS:
 	void setTriggerCommandFinished(scopy::Command *);
 Q_SIGNALS:
-	void writeModeAttribute(std::string mode);
-	void backBtnPressed();
+	void writeModeAttribute(QString mode);
 
 private:
 	void createDevicesMap();
