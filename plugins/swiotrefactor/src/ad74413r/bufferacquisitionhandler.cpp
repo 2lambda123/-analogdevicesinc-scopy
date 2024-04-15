@@ -49,8 +49,8 @@ void BufferAcquisitionHandler::onBufferRefilled(QMap<int, QVector<double>> buffe
 			QList<int> keys = bufferData.keys();
 			for(const auto &key : keys) {
 				m_dataPoints[key].append(bufferData[key]);
-				int unnecessarySamples = m_dataPoints[key].size() % samplingFreq;
 				if(m_dataPoints[key].size() > samplingFreq) {
+					int unnecessarySamples = m_dataPoints[key].size() - samplingFreq;
 					m_dataPoints[key].erase(m_dataPoints[key].begin(),
 								m_dataPoints[key].begin() + unnecessarySamples);
 				}
