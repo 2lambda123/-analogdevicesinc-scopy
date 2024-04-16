@@ -63,6 +63,7 @@ Q_SIGNALS:
 	void readTemperature(double temperature);
 	void modeAttributeChanged(QString mode);
 	void isRuntimeCtxChanged(bool isRuntimeCtx);
+	void writeModeFailed();
 private Q_SLOTS:
 	void writeModeCommandFinished(scopy::Command *cmd);
 	void readModeCommandFinished(scopy::Command *cmd);

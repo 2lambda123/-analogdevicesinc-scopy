@@ -47,6 +47,8 @@ void SWIOTREFACTORPlugin::preload()
 		&SWIOTREFACTORPlugin::onIsRuntimeCtxChanged);
 	connect(m_swiotController, &SwiotController::modeAttributeChanged, this,
 		&SWIOTREFACTORPlugin::onModeAttributeChanged);
+	connect(m_swiotController, &SwiotController::writeModeFailed, m_swiotController,
+		&SwiotController::disconnectSwiot);
 }
 
 bool SWIOTREFACTORPlugin::loadPage()
@@ -132,6 +134,8 @@ void SWIOTREFACTORPlugin::unload()
 		   &SWIOTREFACTORPlugin::onIsRuntimeCtxChanged);
 	disconnect(m_swiotController, &SwiotController::modeAttributeChanged, this,
 		   &SWIOTREFACTORPlugin::onModeAttributeChanged);
+	disconnect(m_swiotController, &SwiotController::writeModeFailed, m_swiotController,
+		   &SwiotController::disconnectSwiot);
 	delete m_infoPage;
 	delete m_swiotController;
 }

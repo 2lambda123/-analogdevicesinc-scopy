@@ -151,6 +151,7 @@ void SwiotController::writeModeAttribute(QString mode)
 		m_cmdQueue->enqueue(writeModeCommand);
 	} else {
 		qDebug(CAT_SWIOT) << "Can't find swiot iio_device";
+		Q_EMIT writeModeFailed();
 	}
 }
 
@@ -167,6 +168,7 @@ void SwiotController::writeModeCommandFinished(scopy::Command *cmd)
 		qInfo(CAT_SWIOT) << R"(Successfully written swiot mode)";
 	} else {
 		qDebug(CAT_SWIOT) << R"(Error, could not change swiot mode)" << tcmd->getReturnCode();
+		Q_EMIT writeModeFailed();
 	}
 }
 
