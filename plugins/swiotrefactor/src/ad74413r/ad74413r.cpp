@@ -414,16 +414,15 @@ void Ad74413r::setupChannel(int chnlIdx, QString function)
 		QString unit = m_swiotAdLogic->getPlotChnlUnitOfMeasure(chnlIdx);
 		auto yRange = m_swiotAdLogic->getPlotChnlRangeValues(chnlIdx);
 
-		//		PlotAxis *chXAxis = createXChnlAxis(chPen);
 		PlotAxis *chYAxis = createYChnlAxis(chPen, unit, yRange.first, yRange.second);
-		PlotChannel *plotCh = new PlotChannel(chnlId, chPen, m_plot, m_plot->xAxis(), chYAxis, this);
+		PlotChannel *plotCh = new PlotChannel(chnlId, chPen, m_plot->xAxis(), chYAxis, this);
+		m_plot->addPlotChannel(plotCh);
 		plotCh->setEnabled(false);
 
 		PlotAxisHandle *chHandle = new PlotAxisHandle(chPen, chYAxis, m_plot, QwtAxis::YLeft, this);
 		chHandle->handle()->setVisible(false);
 		plotCh->setHandle(chHandle);
 		m_plot->addPlotAxisHandle(chHandle);
-		m_plot->addPlotChannel(plotCh);
 		m_plotChnls.insert(chnlIdx, plotCh);
 
 		QMap<QString, iio_channel *> chnlsMap = m_swiotAdLogic->getIioChnl(chnlIdx);
