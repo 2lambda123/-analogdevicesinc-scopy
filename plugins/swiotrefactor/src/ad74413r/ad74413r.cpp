@@ -254,6 +254,8 @@ void Ad74413r::onConfigBtnPressed()
 	Q_EMIT configBtnPressed();
 }
 
+// TBD - The value of 500 is set so that the device reaches a stable state before the new acquisition
+// It is possible that this problem can be solved in other way
 void Ad74413r::onReaderThreadFinished()
 {
 	bool singleCaptureOn = m_acqHandler->singleCapture();
@@ -262,7 +264,7 @@ void Ad74413r::onReaderThreadFinished()
 	}
 	if(m_runBtn->isChecked()) {
 		onRunBtnPressed(false);
-		m_rstAcqTimer->start(300);
+		m_rstAcqTimer->start(500);
 	}
 	if(m_singleBtn->isChecked()) {
 		m_singleBtn->setChecked(false);
