@@ -40,7 +40,6 @@ public:
 
 public Q_SLOTS:
 	void onBackBtnPressed();
-	void modeAttributeChanged(std::string mode);
 	void writeTriggerDevice();
 	void onIsRuntimeCtxChanged(bool isRuntimeCtx);
 private Q_SLOTS:
