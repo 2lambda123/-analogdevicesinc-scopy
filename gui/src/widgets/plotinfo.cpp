@@ -2,6 +2,8 @@
 
 #include "hoverwidget.h"
 #include "plotaxis.h"
+#include "qdatetime.h"
+#include <pluginbase/preferences.h>
 
 using namespace scopy;
 
@@ -39,16 +41,51 @@ void TimePlotSamplingInfo::update(int ps, int bs, double sr)
 	setText(text);
 }
 
-TimePlotStatusInfo::TimePlotStatusInfo(QWidget *parent)
+TimePlotFPS::TimePlotFPS(QWidget *parent)
 {
-	setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
 	StyleHelper::TimePlotSamplingInfo(this);
+	setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+	m_replotTimes = new QList<qint64>();
+	m_lastTimeStamp = 0;
+	m_avgSize = 10;
 }
 
-TimePlotStatusInfo::~TimePlotStatusInfo() {}
+TimePlotFPS::~TimePlotFPS() {}
+
+void TimePlotFPS::update(qint64 timestamp)
+{
+	if(m_lastTimeStamp == 0) {
+		m_lastTimeStamp = timestamp;
+		return;
+	}
+
+	m_replotTimes->append(timestamp - m_lastTimeStamp);
+	if(m_replotTimes->size() > m_avgSize) {
+		m_replotTimes->removeAt(0);
+	}
+
+	qint64 avg = 0;
+	for(qint64 time : *m_replotTimes) {
+		avg += time;
+	}
+	avg /= m_replotTimes->size();
+	m_lastTimeStamp = timestamp;
+
+	setText(QString(QString::number(1000. / avg, 'g', 3) + " FPS"));
+}
+
+GenericInfoLabel::GenericInfoLabel(QWidget *parent)
+{
+	StyleHelper::TimePlotSamplingInfo(this);
+	setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+}
+
+GenericInfoLabel::~GenericInfoLabel() {}
 
 TimePlotInfo::TimePlotInfo(PlotWidget *plot, QWidget *parent)
 {
+	Preferences *p = Preferences::GetInstance();
+
 	m_plot = plot;
 	QVBoxLayout *vlay = new QVBoxLayout(this);
 	vlay->setMargin(0);
@@ -60,7 +97,14 @@ TimePlotInfo::TimePlotInfo(PlotWidget *plot, QWidget *parent)
 
 	m_hdiv = new TimePlotHDivInfo(this);
 	m_sampling = new TimePlotSamplingInfo(this);
-	m_status = new TimePlotStatusInfo(this);
+	m_status = new GenericInfoLabel(this);
+
+	m_fps = new TimePlotFPS(this);
+	connect(plot, &PlotWidget::reploted, this, [=]() { m_fps->update(QDateTime::currentMSecsSinceEpoch()); });
+
+	m_timestamp = new GenericInfoLabel(this);
+	connect(plot, &PlotWidget::newData, this,
+		[=]() { m_timestamp->setText(QDateTime::currentDateTime().time().toString("hh:mm:ss.zzz")); });
 
 	vlay->addLayout(lay);
 
@@ -85,6 +129,36 @@ TimePlotInfo::TimePlotInfo(PlotWidget *plot, QWidget *parent)
 	samplinginfohover->setAnchorOffset(QPoint(-8, 6));
 	samplinginfohover->show();
 	samplinginfohover->setAttribute(Qt::WA_TransparentForMouseEvents);
+
+	HoverWidget *fpsHover = new HoverWidget(nullptr, plot->plot()->canvas(), plot->plot());
+	fpsHover->setContent(m_fps);
+	fpsHover->setAnchorPos(HoverPosition::HP_TOPLEFT);
+	fpsHover->setContentPos(HoverPosition::HP_BOTTOMRIGHT);
+	fpsHover->setAnchorOffset(QPoint(8, 26));
+	fpsHover->setAttribute(Qt::WA_TransparentForMouseEvents);
+	bool showFps = p->get("general_show_plot_fps").toBool();
+	fpsHover->setVisible(showFps);
+	connect(p, &Preferences::preferenceChanged, this, [=](QString name, QVariant type) {
+		if(name == "general_show_plot_fps") {
+			fpsHover->setVisible(p->get("general_show_plot_fps").toBool());
+		}
+	});
+
+	HoverWidget *timestampHover = new HoverWidget(nullptr, plot->plot()->canvas(), plot->plot());
+	timestampHover->setContent(m_timestamp);
+	timestampHover->setAnchorPos(HoverPosition::HP_TOPRIGHT);
+	timestampHover->setContentPos(HoverPosition::HP_BOTTOMLEFT);
+	timestampHover->setAnchorOffset(QPoint(-8, 26));
+	timestampHover->show();
+	timestampHover->setAttribute(Qt::WA_TransparentForMouseEvents);
+
+	HoverWidget *statusHover = new HoverWidget(nullptr, plot->plot()->canvas(), plot->plot());
+	statusHover->setContent(m_status);
+	statusHover->setAnchorPos(HoverPosition::HP_TOPRIGHT);
+	statusHover->setContentPos(HoverPosition::HP_BOTTOMLEFT);
+	statusHover->setAnchorOffset(QPoint(-8, 46));
+	statusHover->show();
+	statusHover->setAttribute(Qt::WA_TransparentForMouseEvents);
 #endif
 }
 
@@ -106,5 +180,7 @@ void TimePlotInfo::update(PlotSamplingInfo info)
 	m_hdiv->update(abs(currMax - currMin) / divs, zoomed);
 	m_sampling->update(info.plotSize, info.bufferSize, info.sampleRate);
 }
+
+void TimePlotInfo::updateStatus(QString status) { m_status->setText(status); }
 
 #include "moc_plotinfo.cpp"

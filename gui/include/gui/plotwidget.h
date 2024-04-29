@@ -94,6 +94,8 @@ Q_SIGNALS:
 	void addedChannel(PlotChannel *ch);
 	void removedChannel(PlotChannel *ch);
 	void plotScaleChanged();
+	void reploted();
+	void newData();
 
 private:
 	QwtPlot *m_plot;

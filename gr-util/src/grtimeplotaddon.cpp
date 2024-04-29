@@ -125,6 +125,8 @@ GRTimePlotAddon::GRTimePlotAddon(QString name, GRTopBlock *top, QObject *parent)
 				m_plotTimer->start();
 		},
 		Qt::QueuedConnection);
+
+	connect(this, &GRTimePlotAddon::newData, m_plotWidget, &PlotWidget::newData);
 }
 
 GRTimePlotAddon::~GRTimePlotAddon() {}
@@ -243,6 +245,8 @@ void GRTimePlotAddon::onStart()
 		m_top->build();
 		m_top->start();
 		m_started = true;
+
+		m_info->updateStatus("running");
 	}
 }
 
@@ -256,6 +260,8 @@ void GRTimePlotAddon::onStop()
 		disconnect(m_top, SIGNAL(builtSignalPaths()), this, SLOT(connectSignalPaths()));
 		disconnect(m_top, SIGNAL(teardownSignalPaths()), this, SLOT(tearDownSignalPaths()));
 		m_started = false;
+
+		m_info->updateStatus("stopped");
 	}
 }
 
@@ -307,6 +313,7 @@ void GRTimePlotAddon::setRawSamplesPtr()
 						   m_currentSamplingInfo.bufferSize);
 		vector_sink->reset();
 	}
+	Q_EMIT newData();
 }
 
 void GRTimePlotAddon::replot()
