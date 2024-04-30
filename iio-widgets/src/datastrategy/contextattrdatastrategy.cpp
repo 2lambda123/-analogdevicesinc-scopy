@@ -17,7 +17,10 @@ QString ContextAttrDataStrategy::optionalData() { return m_optionalData; }
 
 void ContextAttrDataStrategy::save(QString data)
 {
-	qDebug(CAT_CONTEXT_ATTR_DATA_STRATEGY) << "ContextAttrDataStrategy::save called, but the attr is read only";
+	qInfo(CAT_CONTEXT_ATTR_DATA_STRATEGY) << "ContextAttrDataStrategy::save called, but the attr is read only";
+	// The status needs to be emitted in order to keep the iio-widget from getting stuck in
+	// the "Busy" state
+	Q_EMIT emitStatus(QDateTime::currentDateTime(), m_data, data, 0, false);
 	requestData();
 }
 
@@ -35,7 +38,10 @@ void ContextAttrDataStrategy::requestData()
 		return;
 	}
 
+	// There is no return code for the context attr read op, just return 0
+	QString oldData = m_data;
 	m_data = value;
+	Q_EMIT emitStatus(QDateTime::currentDateTime(), oldData, m_data, 0, true);
 	Q_EMIT sendData(m_data, "");
 }
 

@@ -29,10 +29,10 @@
 #include "scopy-iio-widgets_export.h"
 
 namespace scopy {
-class SCOPY_IIO_WIDGETS_EXPORT EditableGuiStrategy : public QWidget, public AttrUiStrategyInterface
+class SCOPY_IIO_WIDGETS_EXPORT EditableGuiStrategy : public QWidget, public GuiStrategyInterface
 {
 	Q_OBJECT
-	Q_INTERFACES(scopy::AttrUiStrategyInterface)
+	Q_INTERFACES(scopy::GuiStrategyInterface)
 public:
 	/**
 	 * @brief This contain a MenuLineEdit with no validation on what the text can or cannot be set.
@@ -41,7 +41,7 @@ public:
 	~EditableGuiStrategy();
 
 	/**
-	 * @overload AttrUiStrategyInterface::ui()
+	 * @overload GuiStrategyInterface::ui()
 	 * */
 	QWidget *ui() override;
 
@@ -51,8 +51,9 @@ public Q_SLOTS:
 	void receiveData(QString currentData, QString optionalData) override;
 
 Q_SIGNALS:
-	void emitData(QString data);
-	void requestData();
+	void displayedNewData(QString data, QString optionalData) override;
+	void emitData(QString data) override;
+	void requestData() override;
 
 private:
 	QWidget *m_ui;

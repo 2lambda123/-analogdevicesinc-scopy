@@ -49,6 +49,7 @@ void CmdQDeviceAttrDataStrategy::save(QString data)
 		return;
 	}
 
+	Q_EMIT aboutToWrite(m_dataRead, data);
 	Command *writeCommand = new IioDeviceAttributeWrite(m_recipe.device, m_recipe.data.toStdString().c_str(),
 							    data.toStdString().c_str(), nullptr);
 	QObject::connect(
@@ -63,7 +64,8 @@ void CmdQDeviceAttrDataStrategy::save(QString data)
 				qWarning(CAT_CMDQ_DEVICE_DATA_STRATEGY) << "Could not write the value " << data;
 			}
 
-			Q_EMIT emitStatus((int)(tcmd->getReturnCode()));
+			Q_EMIT emitStatus(QDateTime::currentDateTime(), m_dataRead, data, (int)(tcmd->getReturnCode()),
+					  false);
 			requestData(); // readback
 		},
 		Qt::QueuedConnection);
@@ -97,9 +99,12 @@ void CmdQDeviceAttrDataStrategy::attributeReadFinished(Command *cmd)
 		return;
 	}
 
-	m_dataRead = QString(tcmd->getResult());
+	QString newData = QString(tcmd->getResult());
 	if(!m_recipe.constDataOptions.isEmpty()) {
+		QString oldData = m_dataRead;
 		m_optionalDataRead = m_recipe.constDataOptions;
+		m_dataRead = newData;
+		Q_EMIT emitStatus(QDateTime::currentDateTime(), oldData, m_dataRead, tcmd->getReturnCode(), true);
 		Q_EMIT sendData(m_dataRead, m_optionalDataRead);
 	} else if(!m_recipe.iioDataOptions.isEmpty()) {
 		// if we have an attribute we have to read, we should read it, increase the counter and emit if
@@ -111,6 +116,9 @@ void CmdQDeviceAttrDataStrategy::attributeReadFinished(Command *cmd)
 		m_cmdQueue->enqueue(readOptionalCommand);
 	} else {
 		// no optional data available, emit empty string for it
+		QString oldData = m_dataRead;
+		m_dataRead = newData;
+		Q_EMIT emitStatus(QDateTime::currentDateTime(), oldData, m_dataRead, tcmd->getReturnCode(), true);
 		Q_EMIT sendData(m_dataRead, QString());
 	}
 }
@@ -128,8 +136,9 @@ void CmdQDeviceAttrDataStrategy::optionalAttrReadFinished(Command *cmd)
 	}
 
 	char *currentOptValue = tcmd->getResult();
+	QString oldData = m_optionalDataRead;
 	m_optionalDataRead = QString(currentOptValue);
-
+	Q_EMIT emitStatus(QDateTime::currentDateTime(), oldData, m_optionalDataRead, tcmd->getReturnCode(), true);
 	Q_EMIT sendData(m_dataRead, m_optionalDataRead);
 }
 

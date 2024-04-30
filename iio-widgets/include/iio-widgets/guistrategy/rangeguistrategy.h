@@ -23,16 +23,17 @@
 
 #include <QWidget>
 #include <iio.h>
-#include <gui/spinbox_a.hpp>
+// #include <gui/spinbox_a.hpp>
+#include <gui/widgets/titlespinbox.h>
 #include "guistrategy/guistrategyinterface.h"
 #include "iiowidgetdata.h"
 #include "scopy-iio-widgets_export.h"
 
 namespace scopy {
-class SCOPY_IIO_WIDGETS_EXPORT RangeAttrUi : public QWidget, public AttrUiStrategyInterface
+class SCOPY_IIO_WIDGETS_EXPORT RangeAttrUi : public QWidget, public GuiStrategyInterface
 {
 	Q_OBJECT
-	Q_INTERFACES(scopy::AttrUiStrategyInterface)
+	Q_INTERFACES(scopy::GuiStrategyInterface)
 public:
 	/**
 	 * @brief This contain a PositionSpinButton that takes the 3 values from recipe->linkedAttributeValue. The
@@ -43,7 +44,7 @@ public:
 	~RangeAttrUi();
 
 	/**
-	 * @overload AttrUiStrategyInterface::ui()
+	 * @overload GuiStrategyInterface::ui()
 	 * */
 	QWidget *ui() override;
 
@@ -53,12 +54,23 @@ public Q_SLOTS:
 	void receiveData(QString currentData, QString optionalData) override;
 
 Q_SIGNALS:
-	void emitData(QString data);
-	void requestData();
+	void displayedNewData(QString data, QString optionalData) override;
+	void emitData(QString data) override;
+	void requestData() override;
 
 private:
+	/**
+	 * @brief tryParse will try an parse a QString to a double and if it fails it will try
+	 * and parse it io an int and the cast it back to a double.
+	 * @param number A QString that represents a double or an int.
+	 * @param success This will be set to false if the QString parse fails and true if the
+	 * number is parsed successfully.
+	 * @return The double that was extracted from the QString.
+	 */
+	double tryParse(QString number, bool *success);
+
 	QWidget *m_ui;
-	PositionSpinButton *m_positionSpinButton;
+	TitleSpinBox *m_spinBox;
 };
 } // namespace scopy
 
