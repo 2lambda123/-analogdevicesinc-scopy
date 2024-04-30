@@ -249,6 +249,11 @@ void PlotWidget::hideAxisLabels()
 	}
 }
 
+void PlotWidget::setAlignCanvasToScales(bool alignCanvasToScales)
+{
+	m_plot->plotLayout()->setAlignCanvasToScales(alignCanvasToScales);
+}
+
 void PlotWidget::hideDefaultAxis()
 {
 	m_plot->setAxisVisible(QwtAxisId(QwtAxis::XBottom, 0), false);
