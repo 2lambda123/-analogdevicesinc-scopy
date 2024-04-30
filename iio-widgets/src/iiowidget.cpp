@@ -25,11 +25,14 @@ using namespace scopy;
 
 Q_LOGGING_CATEGORY(CAT_IIOWIDGET, "iioWidget")
 
-IIOWidget::IIOWidget(AttrUiStrategyInterface *uiStrategy, DataStrategyInterface *dataStrategy, QWidget *parent)
+IIOWidget::IIOWidget(GuiStrategyInterface *uiStrategy, DataStrategyInterface *dataStrategy, QWidget *parent)
 	: QWidget(parent)
 	, m_uiStrategy(uiStrategy)
 	, m_dataStrategy(dataStrategy)
 	, m_progressBar(new SmallProgressBar(this))
+	, m_lastOpTimestamp(nullptr)
+	, m_lastOpState(nullptr)
+	, m_lastReturnCode(0)
 {
 	setLayout(new QVBoxLayout(this));
 	layout()->setContentsMargins(0, 0, 0, 0);
@@ -41,21 +44,37 @@ IIOWidget::IIOWidget(AttrUiStrategyInterface *uiStrategy, DataStrategyInterface 
 		layout()->addWidget(ui);
 	}
 	layout()->addWidget(m_progressBar);
+
+	QWidget *uiStrategyWidget = dynamic_cast<QWidget *>(m_uiStrategy);
+	QWidget *dataStrategyWidget = dynamic_cast<QWidget *>(m_dataStrategy);
+
 	connect(m_progressBar, &SmallProgressBar::progressFinished, this, [this]() { this->saveData(m_lastData); });
 
-	connect(dynamic_cast<QWidget *>(m_uiStrategy), SIGNAL(emitData(QString)), this, SLOT(startTimer(QString)));
-	connect(dynamic_cast<QWidget *>(m_dataStrategy), SIGNAL(emitStatus(int)), this, SLOT(emitDataStatus(int)));
+	connect(uiStrategyWidget, SIGNAL(emitData(QString)), this, SLOT(startTimer(QString)));
 
-	connect(dynamic_cast<QWidget *>(m_uiStrategy), SIGNAL(requestData()), dynamic_cast<QWidget *>(m_dataStrategy),
-		SLOT(requestData()));
-	connect(dynamic_cast<QWidget *>(m_dataStrategy), SIGNAL(sendData(QString, QString)),
-		dynamic_cast<QWidget *>(m_uiStrategy), SLOT(receiveData(QString, QString)));
+	connect(dataStrategyWidget, SIGNAL(emitStatus(QDateTime, QString, QString, int, bool)), this,
+		SLOT(emitDataStatus(QDateTime, QString, QString, int, bool)));
+
+	// forward data request from ui strategy to data strategy
+	connect(uiStrategyWidget, SIGNAL(requestData()), dataStrategyWidget, SLOT(requestData()));
+
+	// forward data from data strategy to ui strategy
+	connect(dataStrategyWidget, SIGNAL(sendData(QString, QString)), uiStrategyWidget,
+		SLOT(receiveData(QString, QString)));
+
+	// intercept the sendData from dataStrategy to collect information
+	connect(dataStrategyWidget, SIGNAL(sendData(QString, QString)), this, SLOT(storeReadInfo(QString, QString)));
+
+	connect(dynamic_cast<QWidget *>(m_dataStrategy), SIGNAL(sendData(QString, QString)), this,
+		SLOT(storeReadInfo(QString, QString)));
 
 	m_dataStrategy->requestData();
 }
 
 void IIOWidget::saveData(QString data)
 {
+	setLastOperationState(IIOWidget::Busy);
+	setLastOperationTimestamp(QDateTime::currentDateTime());
 	m_progressBar->setBarColor(StyleHelper::getColor("ProgressBarBusy"));
 	setToolTip("Operation in progress.");
 
@@ -63,19 +82,30 @@ void IIOWidget::saveData(QString data)
 	m_dataStrategy->save(data);
 }
 
-void IIOWidget::emitDataStatus(int status)
+void IIOWidget::emitDataStatus(QDateTime timestamp, QString oldData, QString newData, int status, bool isReadOp)
 {
-	QString timestamp = QDateTime::currentDateTime().toString("hh:mm:ss");
+	// The read operation will not be shown as a status here as it will overlap with the
+	// write operation that is more likely to fail
+	if(isReadOp) {
+		qInfo(CAT_IIOWIDGET) << timestamp.toString("[hh:mm:ss]")
+				     << "READ (return code: " << QString::number(status) << "):" << oldData << "->"
+				     << newData;
+		return;
+	}
+	setLastOperationTimestamp(timestamp);
+	QString timestampFormat = timestamp.toString("hh:mm:ss");
 	if(status < 0) {
 		m_progressBar->setBarColor(StyleHelper::getColor("ProgressBarError"));
 		QString statusString = "Tried to write \"" + m_lastData +
 			"\", but failed.\nError: " + QString(strerror(-status)) + " (" + QString::number(status) + ").";
-		setToolTip("[" + timestamp + "] " + statusString);
+		setToolTip("[" + timestampFormat + "] " + statusString);
+		setLastOperationState(IIOWidget::Error);
 		qDebug(CAT_IIOWIDGET) << statusString;
 	} else {
 		m_progressBar->setBarColor(StyleHelper::getColor("ProgressBarSuccess"));
 		QString statusString = "Operation finished successfully.";
-		setToolTip("[" + timestamp + "] " + statusString);
+		setToolTip("[" + timestampFormat + "] " + statusString);
+		setLastOperationState(IIOWidget::Correct);
 		qDebug(CAT_IIOWIDGET) << statusString << ". Wrote " + m_lastData + ".";
 	}
 	auto *timer = new QTimer();
@@ -88,7 +118,7 @@ void IIOWidget::emitDataStatus(int status)
 	timer->start(4000);
 }
 
-AttrUiStrategyInterface *IIOWidget::getUiStrategy() { return m_uiStrategy; }
+GuiStrategyInterface *IIOWidget::getUiStrategy() { return m_uiStrategy; }
 
 DataStrategyInterface *IIOWidget::getDataStrategy() { return m_dataStrategy; }
 
@@ -96,11 +126,41 @@ IIOWidgetFactoryRecipe IIOWidget::getRecipe() { return m_recipe; }
 
 void IIOWidget::setRecipe(IIOWidgetFactoryRecipe recipe) { m_recipe = recipe; }
 
+QDateTime *IIOWidget::lastOperationTimestamp() { return m_lastOpTimestamp; }
+
+IIOWidget::State *IIOWidget::lastOperationState() { return m_lastOpState; }
+
+int IIOWidget::lastReturnCode() { return m_lastReturnCode; }
+
 void IIOWidget::startTimer(QString data)
 {
 	m_lastData = data;
 	m_progressBar->setBarColor(StyleHelper::getColor("ScopyBlue"));
 	m_progressBar->startProgress();
+}
+
+void IIOWidget::storeReadInfo(QString data, QString optionalData)
+{
+	// the parameters are unused for the moment
+	Q_UNUSED(data)
+	Q_UNUSED(optionalData)
+	setLastOperationTimestamp(QDateTime::currentDateTime());
+}
+
+void IIOWidget::setLastOperationTimestamp(QDateTime timestamp)
+{
+	if(m_lastOpTimestamp == nullptr) {
+		m_lastOpTimestamp = new QDateTime();
+	}
+	*m_lastOpTimestamp = timestamp;
+}
+
+void IIOWidget::setLastOperationState(State state)
+{
+	if(m_lastOpState == nullptr) {
+		m_lastOpState = new IIOWidget::State;
+	}
+	*m_lastOpState = state;
 }
 
 #include "moc_iiowidget.cpp"

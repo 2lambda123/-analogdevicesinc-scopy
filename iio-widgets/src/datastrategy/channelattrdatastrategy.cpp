@@ -42,13 +42,14 @@ void ChannelAttrDataStrategy::save(QString data)
 		return;
 	}
 
+	Q_EMIT aboutToWrite(m_data, data);
 	ssize_t res = iio_channel_attr_write(m_recipe.channel, m_recipe.data.toStdString().c_str(),
 					     data.toStdString().c_str());
 	if(res < 0) {
 		qWarning(CAT_IIO_DATA_STRATEGY) << "Cannot write" << data << "to" << m_recipe.data;
 	}
 
-	Q_EMIT emitStatus((int)(res));
+	Q_EMIT emitStatus(QDateTime::currentDateTime(), m_data, data, (int)(res), false);
 	requestData(); // readback
 }
 
@@ -75,6 +76,8 @@ void ChannelAttrDataStrategy::requestData()
 			qWarning(CAT_IIO_DATA_STRATEGY)
 				<< "Could not read" << m_recipe.data << "error code:" << optionsResult;
 		}
+		Q_EMIT emitStatus(QDateTime::currentDateTime(), m_optionalData, options, (int)(currentValueResult),
+				  true);
 	}
 
 	if(m_recipe.constDataOptions != "") {
@@ -87,8 +90,11 @@ void ChannelAttrDataStrategy::requestData()
 		options[m_recipe.constDataOptions.size()] = '\0'; // safety measures
 	}
 
+	// the members that contain data need to be refreshed before the signals are emitted
+	QString oldData = m_data;
 	m_data = currentValue;
 	m_optionalData = options;
+	Q_EMIT emitStatus(QDateTime::currentDateTime(), currentValue, m_data, (int)(currentValueResult), true);
 	Q_EMIT sendData(m_data, m_optionalData);
 }
 

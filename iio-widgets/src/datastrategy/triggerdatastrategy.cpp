@@ -48,6 +48,7 @@ void TriggerDataStrategy::save(QString data)
 		qWarning(CAT_TRIGGER_DATA_STRATEGY) << "Invalid arguments, no trigger with name" << data << "was found";
 	}
 
+	Q_EMIT aboutToWrite(m_data, data);
 	int res;
 	if(data == "None") {
 		res = iio_device_set_trigger(m_recipe.device, nullptr);
@@ -63,7 +64,7 @@ void TriggerDataStrategy::save(QString data)
 		}
 	}
 
-	Q_EMIT emitStatus((int)(res));
+	Q_EMIT emitStatus(QDateTime::currentDateTime(), m_data, data, (int)(res), false);
 	requestData();
 }
 
@@ -104,8 +105,10 @@ void TriggerDataStrategy::requestData()
 		}
 	}
 
+	QString oldData = m_data;
 	m_data = currentTriggerName;
 	m_optionalData = triggerOptions;
+	Q_EMIT emitStatus(QDateTime::currentDateTime(), oldData, m_data, res, true);
 	Q_EMIT sendData(m_data, m_optionalData);
 }
 

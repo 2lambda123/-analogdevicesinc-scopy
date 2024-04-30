@@ -41,13 +41,14 @@ void DeviceAttrDataStrategy::save(QString data)
 		return;
 	}
 
+	Q_EMIT aboutToWrite(m_data, data);
 	ssize_t res =
 		iio_device_attr_write(m_recipe.device, m_recipe.data.toStdString().c_str(), data.toStdString().c_str());
 	if(res < 0) {
 		qWarning(CAT_DEVICE_DATA_STRATEGY) << "Cannot write" << data << "to" << m_recipe.data;
 	}
 
-	Q_EMIT emitStatus((int)(res));
+	Q_EMIT emitStatus(QDateTime::currentDateTime(), m_data, data, (int)(res), false);
 	requestData();
 }
 
@@ -73,6 +74,7 @@ void DeviceAttrDataStrategy::requestData()
 			qWarning(CAT_DEVICE_DATA_STRATEGY)
 				<< "Could not read" << m_recipe.data << "error code:" << optionsResult;
 		}
+		Q_EMIT emitStatus(QDateTime::currentDateTime(), m_optionalData, options, currentValueResult, true);
 	}
 
 	if(m_recipe.constDataOptions != "") {
@@ -85,8 +87,10 @@ void DeviceAttrDataStrategy::requestData()
 		options[m_recipe.constDataOptions.size()] = '\0'; // safety measures
 	}
 
+	QString oldData = m_data;
 	m_data = currentValue;
 	m_optionalData = options;
+	Q_EMIT emitStatus(QDateTime::currentDateTime(), oldData, m_data, currentValueResult, true);
 	Q_EMIT sendData(m_data, m_optionalData);
 }
 

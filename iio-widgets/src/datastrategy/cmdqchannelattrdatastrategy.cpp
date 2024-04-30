@@ -48,6 +48,7 @@ void CmdQChannelAttrDataStrategy::save(QString data)
 		return;
 	}
 
+	Q_EMIT aboutToWrite(m_dataRead, data);
 	Command *writeCommand = new IioChannelAttributeWrite(m_recipe.channel, m_recipe.data.toStdString().c_str(),
 							     data.toStdString().c_str(), nullptr);
 	QObject::connect(
@@ -62,7 +63,8 @@ void CmdQChannelAttrDataStrategy::save(QString data)
 				qWarning(CAT_CMDQ_CHANNEL_DATA_STATEGY) << "Could not write the value " << data;
 			}
 
-			Q_EMIT emitStatus((int)(tcmd->getReturnCode()));
+			Q_EMIT emitStatus(QDateTime::currentDateTime(), m_dataRead, data, (int)(tcmd->getReturnCode()),
+					  false);
 			requestData(); // readback
 		},
 		Qt::QueuedConnection);
@@ -97,9 +99,12 @@ void CmdQChannelAttrDataStrategy::attributeReadFinished(Command *cmd)
 		return;
 	}
 
-	m_dataRead = QString(tcmd->getResult());
+	QString newData = QString(tcmd->getResult());
 	if(!m_recipe.constDataOptions.isEmpty()) {
+		QString oldData = m_dataRead;
 		m_optionalDataRead = m_recipe.constDataOptions;
+		m_dataRead = newData;
+		Q_EMIT emitStatus(QDateTime::currentDateTime(), oldData, m_dataRead, tcmd->getReturnCode(), true);
 		Q_EMIT sendData(m_dataRead, m_optionalDataRead);
 	} else if(!m_recipe.iioDataOptions.isEmpty()) {
 		Command *readOptionalCommand = new IioChannelAttributeRead(
@@ -108,6 +113,9 @@ void CmdQChannelAttrDataStrategy::attributeReadFinished(Command *cmd)
 				 &CmdQChannelAttrDataStrategy::optionalAttrReadFinished);
 		m_cmdQueue->enqueue(readOptionalCommand);
 	} else {
+		QString oldData = m_dataRead;
+		m_dataRead = newData;
+		Q_EMIT emitStatus(QDateTime::currentDateTime(), oldData, m_dataRead, tcmd->getReturnCode(), true);
 		// no optional data available, emit empty string for it
 		Q_EMIT sendData(m_dataRead, QString());
 	}
@@ -124,9 +132,11 @@ void CmdQChannelAttrDataStrategy::optionalAttrReadFinished(Command *cmd)
 		qWarning(CAT_CMDQ_CHANNEL_DATA_STATEGY) << "Could not read the value for" << m_recipe.data;
 		return;
 	}
-
 	char *currentOptValue = tcmd->getResult();
+	QString oldData = m_optionalDataRead;
 	m_optionalDataRead = QString(currentOptValue);
+
+	Q_EMIT emitStatus(QDateTime::currentDateTime(), oldData, m_optionalDataRead, tcmd->getReturnCode(), true);
 	Q_EMIT sendData(m_dataRead, m_optionalDataRead);
 }
 

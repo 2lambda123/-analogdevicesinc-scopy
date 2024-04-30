@@ -23,6 +23,7 @@
 
 #include <QObject>
 #include <QLoggingCategory>
+#include <QDateTime>
 #include <iio.h>
 #include "iiowidgetdata.h"
 #include "scopy-iio-widgets_export.h"
@@ -64,9 +65,24 @@ Q_SIGNALS:
 	virtual void sendData(QString data, QString dataOptions) = 0;
 
 	/**
-	 * @brief Emits the status of the operations (e.g. error code)
+	 * @brief This signal is emitted before a write operation
+	 * @param oldData String containing the data what is present before the write
+	 * @param newData String containing the data that will be written
 	 * */
-	virtual void emitStatus(int status) = 0;
+	virtual void aboutToWrite(QString oldData, QString newData) = 0;
+
+	/**
+	 * @brief emitStatus Signal for emitting the status of the operation that was
+	 * just performed.
+	 * @param timestamp QDateTime that holds the timestamp
+	 * @param oldData The data that is present in the iio-widget before the operation
+	 * @param newData The new data that was given to the operation
+	 * @param returnCode int representing the return code of that operation
+	 * @param isReadOp Boolean value set to true if the operation is a read
+	 * operation and false if it is a write operation.
+	 */
+	virtual void emitStatus(QDateTime timestamp, QString oldData, QString newData, int returnCode,
+				bool isReadOp) = 0;
 
 protected:
 	IIOWidgetFactoryRecipe m_recipe;

@@ -44,7 +44,8 @@ public Q_SLOTS:
 
 Q_SIGNALS:
 	void sendData(QString data, QString dataOptions) override;
-	void emitStatus(int status) override;
+	void aboutToWrite(QString oldData, QString newData) override;
+	void emitStatus(QDateTime timestamp, QString oldData, QString newData, int returnCode, bool isReadOp) override;
 
 private Q_SLOTS:
 	void attributeReadFinished(Command *cmd);
