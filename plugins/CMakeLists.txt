@@ -9,10 +9,9 @@ option(ENABLE_PLUGIN_TEST "Enable test plugin" OFF)
 option(ENABLE_PLUGIN_SWIOT "Enable swiot plugin" ON)
 option(ENABLE_PLUGIN_REGMAP "Enable regmap plugin" ON)
 option(ENABLE_PLUGIN_DEBUGGER "Enable debugger plugin" ON)
-option(ENABLE_PLUGIN_DATALOGGER "Enable datalogger plugin" OFF)
-option(ENABLE_PLUGIN_DATAMONITOR "Enable datamonitor plugin" OFF)
 option(ENABLE_PLUGIN_ADC "Enable ADC plugin" ON)
 option(ENABLE_PLUGIN_PQM "Enable PQM plugin" ON)
+option(ENABLE_PLUGIN_DATALOGGER "Enable DATALOGGER plugin" ON)
 
 if(ENABLE_PLUGIN_TEST)
 	add_subdirectory(guitestplugin)
@@ -67,11 +66,6 @@ endif()
 
 if(ENABLE_PLUGIN_DATALOGGER)
 	add_subdirectory(datalogger)
-	list(APPEND PLUGINS ${PLUGIN_NAME})
-endif()
-
-if(ENABLE_PLUGIN_DATAMONITOR)
-	add_subdirectory(datamonitor)
 	list(APPEND PLUGINS ${PLUGIN_NAME})
 endif()
 
